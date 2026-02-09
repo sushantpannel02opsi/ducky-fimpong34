@@ -206,11 +206,19 @@
 
       .loading-spinner-container { display: none; justify-content: center; align-items: center; padding: 20px 0; }
       .loading-spinner-container.show { display: flex; }
-      .list-spinner { font-size: 25px; color: var(--text-secondary); animation: spin 1.2s linear infinite; }
-      @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
 
       #loading-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #fff; display: none; justify-content: center; align-items: center; z-index: 9999; }
-      .spinner { width: 50px; height: 50px; animation: spin 1.2s linear infinite; }
+      
+      .spinner-video {
+        width: 100px;
+        height: 100px;
+        object-fit: contain;
+      }
+      .list-spinner-video {
+        width: 50px;
+        height: 50px;
+        object-fit: contain;
+      }
     </style>
   </head>
   <body>
@@ -247,13 +255,19 @@
       <div class="scrollable-content">
         <div id="contactList">
           <div class="loading-spinner-container" id="loading-spinner-list">
-            <i class="fas fa-spinner list-spinner"></i>
+            <video class="list-spinner-video" autoplay loop muted playsinline>
+              <source src="blackeer-loading-theme.mov" type="video/mp4" />
+            </video>
           </div>
         </div>
       </div>
     </div>
 
-    <div id="loading-overlay"><img src="spinergren.png" alt="Loading..." class="spinner" /></div>
+    <div id="loading-overlay">
+      <video class="spinner-video" autoplay loop muted playsinline>
+        <source src="blackeer-loading-theme.mov" type="video/mp4" />
+      </video>
+    </div>
 
     <script>
       document.addEventListener("DOMContentLoaded", function () {
@@ -269,14 +283,14 @@
 
         const contactStorageKey = "cashAppContacts";
         let contacts = [], searchTimeout;
-        
+        let isFetchingExternal = false;
+
         const rawAmount = localStorage.getItem("paymentAmount") || "0.00";
         const baseAmount = parseFloat(rawAmount.replace(/,/g, ''));
         const availableColors = ["#8A2BE2", "#FF7F50", "#1E90FF", "#20B2AA", "#FF4500", "#DA70D6", "#FF69B4", "#DAA520", "#32CD32", "#FFD700"];
         
         const girlPics = ["attitude-girl-pic.jpg", "beautiful-cute-simple-girl-pic.jpg", "f7d65437f315b9cbcccb71374c66bd11.jpg", "bad88004f2898d4c4dd4b747d5e4678b.jpg", "images (1).jpeg"];
         const boyPics = ["1st.avif", "bbb.jpg"];
-        const funnyPics = ["anyone-do-i-need-a-new-pfp-v0-lpbobx55hphe1.webp", "ask_me_about_my_pfp_profile_picture_funny_nft_trucker_hat-r0762c694ea514af5aabefa551baeea03_eahwk_8byvr_644.jpg"];
 
         const defaultContacts = [
           { id: 1, name: "James Rodrigo", cashtag: "$jamesr55", avatar: "1st.avif", color: "#666" },
@@ -285,45 +299,28 @@
           { id: 8, name: "Maria Garcia", cashtag: "$mgarcia", avatar: "images (1).jpeg", color: "#FF69B4" }
         ];
 
-      async function fetchExternalProfile(query) {
-        const val = query.trim();
-        let backendUrl = "";
-        const baseUrl = window.location.origin;
+        async function fetchExternalProfile(query) {
+          const val = query.trim();
+          let backendUrl = "";
+          const baseUrl = window.location.origin;
+          if (val.startsWith('$')) backendUrl = `${baseUrl}/cash?tag=${encodeURIComponent(val)}`;
+          else if (val.startsWith('@')) backendUrl = `${baseUrl}/tiktok?user=${encodeURIComponent(val)}`;
+          else return null;
 
-        if (val.startsWith('$')) {
-          backendUrl = `${baseUrl}/cash?tag=${encodeURIComponent(val)}`;
-        } else if (val.startsWith('@')) {
-          backendUrl = `${baseUrl}/tiktok?user=${encodeURIComponent(val)}`;
-        } else {
-          return null;
+          try {
+            const response = await fetch(backendUrl);
+            if (!response.ok) return null;
+            const data = await response.json();
+            return { name: data.name || val, cashtag: val, avatar: data.avatar, isExternal: true };
+          } catch (e) { return null; }
         }
 
-        try {
-          const response = await fetch(backendUrl);
-          if (!response.ok) return null;
-          const data = await response.json();
-
-          return {
-            name: data.name || val,
-            cashtag: val,
-            avatar: data.avatar, // proxy link from server
-            isExternal: true
-          };
-        } catch (e) {
-          console.error("Connection to server failed. Is node server.cjs running?");
-          return null;
-        }
-      }
-
-      function generateContactHtml(contact, isExternal = false) {
+        function generateContactHtml(contact, isExternal = false) {
           const trimmedName = contact.name.trim();
           const displayChar = (trimmedName.startsWith("$") ? trimmedName.charAt(1) : trimmedName.charAt(0)).toUpperCase() || "?";
-
           const avatarContent = contact.avatar 
-              ? `<img src="${contact.avatar}" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
-                 <div class="avatar-fallback" style="display:none; background-color:#00d54b; width:100%; height:100%; align-items:center; justify-content:center; color:#fff;">${displayChar}</div>` 
+              ? `<img src="${contact.avatar}" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';"><div class="avatar-fallback" style="display:none; background-color:#00d54b; width:100%; height:100%; align-items:center; justify-content:center; color:#fff;">${displayChar}</div>` 
               : `<div class="avatar-fallback" style="display:flex; background-color:${contact.color || '#00d54b'}; width:100%; height:100%; align-items:center; justify-content:center; color:#fff;">${displayChar}</div>`;
-        
           const externalClass = isExternal ? "smart-suggestion" : "";
 
           return `
@@ -337,7 +334,7 @@
                   </div>
                   <div class="checkbox"><i class="fa-solid fa-check"></i></div>
               </div>`;
-      }
+        }
 
         closeBtn.addEventListener("click", function() {
             appContainer.style.transition = "transform 0.5s cubic-bezier(0.165, 0.84, 0.44, 1)";
@@ -374,32 +371,39 @@
         }
 
         async function renderFilteredResults(query) {
-          loadingSpinnerList.classList.remove("show");
           const cleanQuery = query.toLowerCase().replace(/^\$/, '');
           let html = '';
-          if (query.startsWith('@') || query.startsWith('$')) {
-            const externalData = await fetchExternalProfile(query);
-            if (externalData) { html += generateContactHtml(externalData, true); }
+          const isExternalSearch = query.startsWith('@') || query.startsWith('$');
+          if (isExternalSearch) {
+            isFetchingExternal = true;
+            loadingSpinnerList.classList.add("show");
+          } else {
+            loadingSpinnerList.classList.remove("show");
           }
+
+          if (isExternalSearch) {
+            try {
+              const externalData = await fetchExternalProfile(query);
+              if (externalData) { html += generateContactHtml(externalData, true); }
+            } finally { isFetchingExternal = false; }
+          }
+
           if (query !== "") {
             let localGirls = [...girlPics].sort(() => Math.random() - 0.5);
-            let localBoys = [...boyPics].sort(() => Math.random() - 0.5);
-            let localFunny = [...funnyPics].sort(() => Math.random() - 0.5);
-            const randomCount = 5; 
             const suffixes = [" Harrison", " Lee", " Garcia", " Patel", " Swift"];
-            for (let i = 0; i < randomCount; i++) {
-                const isGirl = (cleanQuery.length + i) % 2 === 0;
-                let selectedAvatar = isGirl ? localGirls.pop() : localBoys.pop();
+            for (let i = 0; i < 5; i++) {
                 html += generateContactHtml({
                     name: i === 0 ? query : query + suffixes[i % suffixes.length],
                     cashtag: '$' + cleanQuery + (i === 0 ? '' : Math.floor(Math.random() * 99)),
-                    avatar: selectedAvatar,
+                    avatar: localGirls[i % localGirls.length],
                     color: availableColors[i % availableColors.length]
                 });
             }
           } else { html = contacts.map(c => generateContactHtml(c)).join(""); }
+
           contactListEl.innerHTML = html;
           contactListEl.prepend(loadingSpinnerList);
+          if (!isFetchingExternal) loadingSpinnerList.classList.remove("show");
         }
 
         toInput.addEventListener("input", () => { renderContacts(true, 'to'); updatePayState(); });
@@ -419,20 +423,28 @@
           updatePayState();
         });
 
+        // --- THE FIX: 3000ms TOTAL LOADING / 2400ms REDIRECT ---
         payBtn.addEventListener("click", function () {
           if (!this.classList.contains("active")) return;
+          
           const recipientData = {
             name: toInput.value,
             cashtag: toInput.dataset.selectedCashtag || toInput.value
           };
+          
           localStorage.setItem("pendingRecipientData", JSON.stringify(recipientData));
           localStorage.setItem("pendingPaymentMessage", forInput.value);
+          
           loadingOverlay.style.display = "flex";
-          setTimeout(() => window.location.href = "payment-result.html", 2000);
+          
+          // Trigger redirect at 2.4 seconds so the loader is still spinning when the switch starts
+          setTimeout(() => {
+            window.location.href = "payment-result.html";
+          }, 2400); 
         });
 
         contacts = getContacts();
-        document.getElementById("mainPaymentIcon").innerHTML = `<img src=\"kashapp.png\">`;
+        document.getElementById("mainPaymentIcon").innerHTML = `<img src="kashapp.png">`;
         amountDisplay.textContent = `$${baseAmount.toLocaleString(undefined, {minimumFractionDigits: 2})}`;
         renderContacts();
       });
